@@ -44,8 +44,8 @@ import (
 )
 
 const (
-	constSTDINstr       string = "STDIN"
-	stopValidateMessage        = "if you choose to ignore these errors, turn validation off with --validate=false"
+	constSTDINstr       = "STDIN"
+	stopValidateMessage = "if you choose to ignore these errors, turn validation off with --validate=false"
 )
 
 // Watchable describes a resource that can be watched for changes that occur on the server,
@@ -158,7 +158,7 @@ func (i *Info) ObjectName() string {
 
 // String returns the general purpose string representation
 func (i *Info) String() string {
-	basicInfo := fmt.Sprintf("Name: %q, Namespace: %q\nObject: %+q", i.Name, i.Namespace, i.Object)
+	basicInfo := fmt.Sprintf("Name: %q, Namespace: %q", i.Name, i.Namespace)
 	if i.Mapping != nil {
 		mappingInfo := fmt.Sprintf("Resource: %q, GroupVersionKind: %q", i.Mapping.Resource.String(),
 			i.Mapping.GroupVersionKind.String())

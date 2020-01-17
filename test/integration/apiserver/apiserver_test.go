@@ -39,7 +39,7 @@ import (
 	"k8s.io/apiextensions-apiserver/test/integration/fixtures"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
-	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
+	metainternalversionscheme "k8s.io/apimachinery/pkg/apis/meta/internalversion/scheme"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
@@ -403,11 +403,9 @@ func TestNameInFieldSelector(t *testing.T) {
 	defer closeFn()
 
 	numNamespaces := 3
-	namespaces := make([]*v1.Namespace, 0, numNamespaces)
 	for i := 0; i < 3; i++ {
 		ns := framework.CreateTestingNamespace(fmt.Sprintf("ns%d", i), s, t)
 		defer framework.DeleteTestingNamespace(ns, s, t)
-		namespaces = append(namespaces, ns)
 
 		_, err := clientSet.CoreV1().Secrets(ns.Name).Create(makeSecret("foo"))
 		if err != nil {
@@ -1714,7 +1712,7 @@ func expectPartialObjectMetaEventsProtobuf(t *testing.T, r io.Reader, values ...
 		protobuf.LengthDelimitedFramer.NewFrameReader(ioutil.NopCloser(r)),
 		rs,
 	)
-	ds := metainternalversion.Codecs.UniversalDeserializer()
+	ds := metainternalversionscheme.Codecs.UniversalDeserializer()
 
 	for i, value := range values {
 		var evt metav1.WatchEvent
@@ -1823,7 +1821,7 @@ func expectPartialObjectMetaV1EventsProtobuf(t *testing.T, r io.Reader, values .
 		protobuf.LengthDelimitedFramer.NewFrameReader(ioutil.NopCloser(r)),
 		rs,
 	)
-	ds := metainternalversion.Codecs.UniversalDeserializer()
+	ds := metainternalversionscheme.Codecs.UniversalDeserializer()
 
 	for i, value := range values {
 		var evt metav1.WatchEvent

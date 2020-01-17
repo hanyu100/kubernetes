@@ -29,8 +29,8 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/kubernetes/test/e2e/framework"
 	e2ekubelet "k8s.io/kubernetes/test/e2e/framework/kubelet"
-	e2elog "k8s.io/kubernetes/test/e2e/framework/log"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
+	e2eskipper "k8s.io/kubernetes/test/e2e/framework/skipper"
 	e2essh "k8s.io/kubernetes/test/e2e/framework/ssh"
 	testutils "k8s.io/kubernetes/test/utils"
 
@@ -48,19 +48,19 @@ var _ = SIGDescribe("NodeProblemDetector [DisabledForLargeClusters]", func() {
 	f := framework.NewDefaultFramework("node-problem-detector")
 
 	ginkgo.BeforeEach(func() {
-		framework.SkipUnlessSSHKeyPresent()
-		framework.SkipUnlessProviderIs(framework.ProvidersWithSSH...)
-		framework.SkipUnlessProviderIs("gce", "gke")
-		framework.SkipUnlessNodeOSDistroIs("gci", "ubuntu")
+		e2eskipper.SkipUnlessSSHKeyPresent()
+		e2eskipper.SkipUnlessProviderIs(framework.ProvidersWithSSH...)
+		e2eskipper.SkipUnlessProviderIs("gce", "gke")
+		e2eskipper.SkipUnlessNodeOSDistroIs("gci", "ubuntu")
 		e2enode.WaitForTotalHealthy(f.ClientSet, time.Minute)
 	})
 
 	ginkgo.It("should run without error", func() {
-		framework.SkipUnlessSSHKeyPresent()
+		e2eskipper.SkipUnlessSSHKeyPresent()
 
 		ginkgo.By("Getting all nodes and their SSH-able IP addresses")
-		nodes := framework.GetReadySchedulableNodesOrDie(f.ClientSet)
-		framework.ExpectNotEqual(len(nodes.Items), 0)
+		nodes, err := e2enode.GetReadySchedulableNodes(f.ClientSet)
+		framework.ExpectNoError(err)
 		hosts := []string{}
 		for _, node := range nodes.Items {
 			for _, addr := range node.Status.Addresses {
@@ -188,7 +188,7 @@ var _ = SIGDescribe("NodeProblemDetector [DisabledForLargeClusters]", func() {
 			workingSetStatsMsg += fmt.Sprintf(" %s[%.1f|%.1f|%.1f];", nodes.Items[i].Name,
 				workingSetStats[host][0], workingSetStats[host][len(workingSetStats[host])/2], workingSetStats[host][len(workingSetStats[host])-1])
 		}
-		e2elog.Logf("Node-Problem-Detector CPU and Memory Stats:\n\t%s\n\t%s\n\t%s", cpuStatsMsg, rssStatsMsg, workingSetStatsMsg)
+		framework.Logf("Node-Problem-Detector CPU and Memory Stats:\n\t%s\n\t%s\n\t%s", cpuStatsMsg, rssStatsMsg, workingSetStatsMsg)
 	})
 })
 
@@ -282,7 +282,9 @@ func getCPUStat(f *framework.Framework, host string) (usage, uptime float64) {
 	lines := strings.Split(result.Stdout, "\n")
 
 	usage, err = strconv.ParseFloat(lines[0], 64)
+	framework.ExpectNoError(err, "Cannot parse float for usage")
 	uptime, err = strconv.ParseFloat(lines[1], 64)
+	framework.ExpectNoError(err, "Cannot parse float for uptime")
 
 	// Convert from nanoseconds to seconds
 	usage *= 1e-9

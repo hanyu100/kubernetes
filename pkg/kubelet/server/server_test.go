@@ -51,6 +51,7 @@ import (
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	statsapi "k8s.io/kubernetes/pkg/kubelet/apis/stats/v1alpha1"
+	"k8s.io/utils/pointer"
 
 	// Do some initialization to decode the query parameters correctly.
 	_ "k8s.io/kubernetes/pkg/apis/core/install"
@@ -283,7 +284,7 @@ func (f *fakeAuth) AuthenticateRequest(req *http.Request) (*authenticator.Respon
 func (f *fakeAuth) GetRequestAttributes(u user.Info, req *http.Request) authorizer.Attributes {
 	return f.attributesFunc(u, req)
 }
-func (f *fakeAuth) Authorize(a authorizer.Attributes) (authorized authorizer.Decision, reason string, err error) {
+func (f *fakeAuth) Authorize(ctx context.Context, a authorizer.Attributes) (authorized authorizer.Decision, reason string, err error) {
 	return f.authorizeFunc(a)
 }
 
@@ -948,110 +949,45 @@ func setGetContainerLogsFunc(fw *serverTestFramework, t *testing.T, expectedPodN
 	}
 }
 
-// TODO: I really want to be a table driven test
 func TestContainerLogs(t *testing.T) {
 	fw := newServerTest()
 	defer fw.testHTTPServer.Close()
-	output := "foo bar"
-	podNamespace := "other"
-	podName := "foo"
-	expectedPodName := getPodName(podName, podNamespace)
-	expectedContainerName := "baz"
-	setPodByNameFunc(fw, podNamespace, podName, expectedContainerName)
-	setGetContainerLogsFunc(fw, t, expectedPodName, expectedContainerName, &v1.PodLogOptions{}, output)
-	resp, err := http.Get(fw.testHTTPServer.URL + "/containerLogs/" + podNamespace + "/" + podName + "/" + expectedContainerName)
-	if err != nil {
-		t.Errorf("Got error GETing: %v", err)
-	}
-	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Errorf("Error reading container logs: %v", err)
+	tests := map[string]struct {
+		query        string
+		podLogOption *v1.PodLogOptions
+	}{
+		"without tail":     {"", &v1.PodLogOptions{}},
+		"with tail":        {"?tailLines=5", &v1.PodLogOptions{TailLines: pointer.Int64Ptr(5)}},
+		"with legacy tail": {"?tail=5", &v1.PodLogOptions{TailLines: pointer.Int64Ptr(5)}},
+		"with tail all":    {"?tail=all", &v1.PodLogOptions{}},
+		"with follow":      {"?follow=1", &v1.PodLogOptions{Follow: true}},
 	}
-	result := string(body)
-	if result != output {
-		t.Errorf("Expected: '%v', got: '%v'", output, result)
-	}
-}
 
-func TestContainerLogsWithTail(t *testing.T) {
-	fw := newServerTest()
-	defer fw.testHTTPServer.Close()
-	output := "foo bar"
-	podNamespace := "other"
-	podName := "foo"
-	expectedPodName := getPodName(podName, podNamespace)
-	expectedContainerName := "baz"
-	expectedTail := int64(5)
-	setPodByNameFunc(fw, podNamespace, podName, expectedContainerName)
-	setGetContainerLogsFunc(fw, t, expectedPodName, expectedContainerName, &v1.PodLogOptions{TailLines: &expectedTail}, output)
-	resp, err := http.Get(fw.testHTTPServer.URL + "/containerLogs/" + podNamespace + "/" + podName + "/" + expectedContainerName + "?tailLines=5")
-	if err != nil {
-		t.Errorf("Got error GETing: %v", err)
-	}
-	defer resp.Body.Close()
+	for desc, test := range tests {
+		t.Run(desc, func(t *testing.T) {
+			output := "foo bar"
+			podNamespace := "other"
+			podName := "foo"
+			expectedPodName := getPodName(podName, podNamespace)
+			expectedContainerName := "baz"
+			setPodByNameFunc(fw, podNamespace, podName, expectedContainerName)
+			setGetContainerLogsFunc(fw, t, expectedPodName, expectedContainerName, test.podLogOption, output)
+			resp, err := http.Get(fw.testHTTPServer.URL + "/containerLogs/" + podNamespace + "/" + podName + "/" + expectedContainerName + test.query)
+			if err != nil {
+				t.Errorf("Got error GETing: %v", err)
+			}
+			defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Errorf("Error reading container logs: %v", err)
-	}
-	result := string(body)
-	if result != output {
-		t.Errorf("Expected: '%v', got: '%v'", output, result)
-	}
-}
-
-func TestContainerLogsWithLegacyTail(t *testing.T) {
-	fw := newServerTest()
-	defer fw.testHTTPServer.Close()
-	output := "foo bar"
-	podNamespace := "other"
-	podName := "foo"
-	expectedPodName := getPodName(podName, podNamespace)
-	expectedContainerName := "baz"
-	expectedTail := int64(5)
-	setPodByNameFunc(fw, podNamespace, podName, expectedContainerName)
-	setGetContainerLogsFunc(fw, t, expectedPodName, expectedContainerName, &v1.PodLogOptions{TailLines: &expectedTail}, output)
-	resp, err := http.Get(fw.testHTTPServer.URL + "/containerLogs/" + podNamespace + "/" + podName + "/" + expectedContainerName + "?tail=5")
-	if err != nil {
-		t.Errorf("Got error GETing: %v", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Errorf("Error reading container logs: %v", err)
-	}
-	result := string(body)
-	if result != output {
-		t.Errorf("Expected: '%v', got: '%v'", output, result)
-	}
-}
-
-func TestContainerLogsWithTailAll(t *testing.T) {
-	fw := newServerTest()
-	defer fw.testHTTPServer.Close()
-	output := "foo bar"
-	podNamespace := "other"
-	podName := "foo"
-	expectedPodName := getPodName(podName, podNamespace)
-	expectedContainerName := "baz"
-	setPodByNameFunc(fw, podNamespace, podName, expectedContainerName)
-	setGetContainerLogsFunc(fw, t, expectedPodName, expectedContainerName, &v1.PodLogOptions{}, output)
-	resp, err := http.Get(fw.testHTTPServer.URL + "/containerLogs/" + podNamespace + "/" + podName + "/" + expectedContainerName + "?tail=all")
-	if err != nil {
-		t.Errorf("Got error GETing: %v", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Errorf("Error reading container logs: %v", err)
-	}
-	result := string(body)
-	if result != output {
-		t.Errorf("Expected: '%v', got: '%v'", output, result)
+			body, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				t.Errorf("Error reading container logs: %v", err)
+			}
+			result := string(body)
+			if result != output {
+				t.Errorf("Expected: '%v', got: '%v'", output, result)
+			}
+		})
 	}
 }
 
@@ -1075,30 +1011,14 @@ func TestContainerLogsWithInvalidTail(t *testing.T) {
 	}
 }
 
-func TestContainerLogsWithFollow(t *testing.T) {
-	fw := newServerTest()
-	defer fw.testHTTPServer.Close()
-	output := "foo bar"
-	podNamespace := "other"
-	podName := "foo"
-	expectedPodName := getPodName(podName, podNamespace)
-	expectedContainerName := "baz"
-	setPodByNameFunc(fw, podNamespace, podName, expectedContainerName)
-	setGetContainerLogsFunc(fw, t, expectedPodName, expectedContainerName, &v1.PodLogOptions{Follow: true}, output)
-	resp, err := http.Get(fw.testHTTPServer.URL + "/containerLogs/" + podNamespace + "/" + podName + "/" + expectedContainerName + "?follow=1")
+func makeReq(t *testing.T, method, url, clientProtocol string) *http.Request {
+	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
-		t.Errorf("Got error GETing: %v", err)
+		t.Fatalf("error creating request: %v", err)
 	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Errorf("Error reading container logs: %v", err)
-	}
-	result := string(body)
-	if result != output {
-		t.Errorf("Expected: '%v', got: '%v'", output, result)
-	}
+	req.Header.Set("Content-Type", "")
+	req.Header.Add("X-Stream-Protocol-Version", clientProtocol)
+	return req
 }
 
 func TestServeExecInContainerIdleTimeout(t *testing.T) {
@@ -1117,7 +1037,7 @@ func TestServeExecInContainerIdleTimeout(t *testing.T) {
 	upgradeRoundTripper := spdy.NewSpdyRoundTripper(nil, true, true)
 	c := &http.Client{Transport: upgradeRoundTripper}
 
-	resp, err := c.Post(url, "", nil)
+	resp, err := c.Do(makeReq(t, "POST", url, "v4.channel.k8s.io"))
 	if err != nil {
 		t.Fatalf("Got error POSTing: %v", err)
 	}
@@ -1153,14 +1073,13 @@ func testExecAttach(t *testing.T, verb string) {
 		"stdout":                       {stdout: true, responseStatusCode: http.StatusSwitchingProtocols},
 		"stderr":                       {stderr: true, responseStatusCode: http.StatusSwitchingProtocols},
 		"stdout and stderr":            {stdout: true, stderr: true, responseStatusCode: http.StatusSwitchingProtocols},
-		"stdout stderr and tty":        {stdout: true, stderr: true, tty: true, responseStatusCode: http.StatusSwitchingProtocols},
 		"stdin stdout and stderr":      {stdin: true, stdout: true, stderr: true, responseStatusCode: http.StatusSwitchingProtocols},
 		"stdin stdout stderr with uid": {stdin: true, stdout: true, stderr: true, responseStatusCode: http.StatusSwitchingProtocols, uid: true},
 		"stdout with redirect":         {stdout: true, responseStatusCode: http.StatusFound, redirect: true},
 	}
 
-	for desc, test := range tests {
-		test := test
+	for desc := range tests {
+		test := tests[desc]
 		t.Run(desc, func(t *testing.T) {
 			ss, err := newTestStreamingServer(0)
 			require.NoError(t, err)
@@ -1284,7 +1203,7 @@ func testExecAttach(t *testing.T, verb string) {
 				c = &http.Client{Transport: upgradeRoundTripper}
 			}
 
-			resp, err = c.Post(url, "", nil)
+			resp, err = c.Do(makeReq(t, "POST", url, "v4.channel.k8s.io"))
 			require.NoError(t, err, "POSTing")
 			defer resp.Body.Close()
 
@@ -1380,7 +1299,8 @@ func TestServePortForwardIdleTimeout(t *testing.T) {
 	upgradeRoundTripper := spdy.NewRoundTripper(nil, true, true)
 	c := &http.Client{Transport: upgradeRoundTripper}
 
-	resp, err := c.Post(url, "", nil)
+	req := makeReq(t, "POST", url, "portforward.k8s.io")
+	resp, err := c.Do(req)
 	if err != nil {
 		t.Fatalf("Got error POSTing: %v", err)
 	}
@@ -1423,8 +1343,8 @@ func TestServePortForward(t *testing.T) {
 	podNamespace := "other"
 	podName := "foo"
 
-	for desc, test := range tests {
-		test := test
+	for desc := range tests {
+		test := tests[desc]
 		t.Run(desc, func(t *testing.T) {
 			ss, err := newTestStreamingServer(0)
 			require.NoError(t, err)
@@ -1488,7 +1408,8 @@ func TestServePortForward(t *testing.T) {
 				c = &http.Client{Transport: upgradeRoundTripper}
 			}
 
-			resp, err := c.Post(url, "", nil)
+			req := makeReq(t, "POST", url, "portforward.k8s.io")
+			resp, err := c.Do(req)
 			require.NoError(t, err, "POSTing")
 			defer resp.Body.Close()
 

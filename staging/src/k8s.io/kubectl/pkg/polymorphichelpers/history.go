@@ -242,7 +242,7 @@ func (h *StatefulSetHistoryViewer) ViewHistory(namespace, name string, revision 
 	if len(history) <= 0 {
 		return "No rollout history found.", nil
 	}
-	revisions := make([]int64, len(history))
+	revisions := make([]int64, 0, len(history))
 	for _, revision := range history {
 		revisions = append(revisions, revision.Revision)
 	}
@@ -348,20 +348,20 @@ func statefulSetHistory(
 
 // applyDaemonSetHistory returns a specific revision of DaemonSet by applying the given history to a copy of the given DaemonSet
 func applyDaemonSetHistory(ds *appsv1.DaemonSet, history *appsv1.ControllerRevision) (*appsv1.DaemonSet, error) {
-	clone := ds.DeepCopy()
-	cloneBytes, err := json.Marshal(clone)
+	dsBytes, err := json.Marshal(ds)
 	if err != nil {
 		return nil, err
 	}
-	patched, err := strategicpatch.StrategicMergePatch(cloneBytes, history.Data.Raw, clone)
+	patched, err := strategicpatch.StrategicMergePatch(dsBytes, history.Data.Raw, ds)
 	if err != nil {
 		return nil, err
 	}
-	err = json.Unmarshal(patched, clone)
+	result := &appsv1.DaemonSet{}
+	err = json.Unmarshal(patched, result)
 	if err != nil {
 		return nil, err
 	}
-	return clone, nil
+	return result, nil
 }
 
 // TODO: copied here until this becomes a describer

@@ -68,13 +68,13 @@ var (
 		kubectl run nginx --image=nginx
 
 		# Start a single instance of hazelcast and let the container expose port 5701 .
-		kubectl run hazelcast --image=hazelcast --port=5701
+		kubectl run hazelcast --image=hazelcast/hazelcast --port=5701
 
 		# Start a single instance of hazelcast and set environment variables "DNS_DOMAIN=cluster" and "POD_NAMESPACE=default" in the container.
-		kubectl run hazelcast --image=hazelcast --env="DNS_DOMAIN=cluster" --env="POD_NAMESPACE=default"
+		kubectl run hazelcast --image=hazelcast/hazelcast --env="DNS_DOMAIN=cluster" --env="POD_NAMESPACE=default"
 
 		# Start a single instance of hazelcast and set labels "app=hazelcast" and "env=prod" in the container.
-		kubectl run hazelcast --image=hazelcast --labels="app=hazelcast,env=prod"
+		kubectl run hazelcast --image=hazelcast/hazelcast --labels="app=hazelcast,env=prod"
 
 		# Start a replicated instance of nginx.
 		kubectl run nginx --image=nginx --replicas=5
@@ -339,6 +339,12 @@ func (o *RunOptions) Run(f cmdutil.Factory, cmd *cobra.Command, args []string) e
 		}
 	}
 
+	generators := generateversioned.GeneratorFn("run")
+	generator, found := generators[generatorName]
+	if !found {
+		return cmdutil.UsageErrorf(cmd, "generator %q not found", generatorName)
+	}
+
 	// start deprecating all generators except for 'run-pod/v1' which will be
 	// the only supported on a route to simple kubectl run which should mimic
 	// docker run
@@ -346,11 +352,6 @@ func (o *RunOptions) Run(f cmdutil.Factory, cmd *cobra.Command, args []string) e
 		fmt.Fprintf(o.ErrOut, "kubectl run --generator=%s is DEPRECATED and will be removed in a future version. Use kubectl run --generator=%s or kubectl create instead.\n", generatorName, generateversioned.RunPodV1GeneratorName)
 	}
 
-	generators := generateversioned.GeneratorFn("run")
-	generator, found := generators[generatorName]
-	if !found {
-		return cmdutil.UsageErrorf(cmd, "generator %q not found", generatorName)
-	}
 	names := generator.ParamNames()
 	params := generate.MakeParams(cmd, names)
 	params["name"] = args[0]

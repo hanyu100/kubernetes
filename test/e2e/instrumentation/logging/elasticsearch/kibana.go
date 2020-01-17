@@ -22,14 +22,14 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/kubernetes/test/e2e/framework"
-	e2elog "k8s.io/kubernetes/test/e2e/framework/log"
 	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	e2eservice "k8s.io/kubernetes/test/e2e/framework/service"
+	e2eskipper "k8s.io/kubernetes/test/e2e/framework/skipper"
 	instrumentation "k8s.io/kubernetes/test/e2e/instrumentation/common"
 
 	"github.com/onsi/ginkgo"
-	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 var _ = instrumentation.SIGDescribe("Kibana Logging Instances Is Alive [Feature:Elasticsearch]", func() {
@@ -39,7 +39,7 @@ var _ = instrumentation.SIGDescribe("Kibana Logging Instances Is Alive [Feature:
 		// TODO: For now assume we are only testing cluster logging with Elasticsearch
 		// and Kibana on GCE. Once we are sure that Elasticsearch and Kibana cluster level logging
 		// works for other providers we should widen this scope of this test.
-		framework.SkipUnlessProviderIs("gce")
+		e2eskipper.SkipUnlessProviderIs("gce")
 	})
 
 	ginkgo.It("should check that the Kibana logging instance is alive", func() {
@@ -64,7 +64,7 @@ func ClusterLevelLoggingWithKibana(f *framework.Framework) {
 	// being run as the first e2e test just after the e2e cluster has been created.
 	err := wait.Poll(pollingInterval, pollingTimeout, func() (bool, error) {
 		if _, err := s.Get("kibana-logging", metav1.GetOptions{}); err != nil {
-			e2elog.Logf("Kibana is unreachable: %v", err)
+			framework.Logf("Kibana is unreachable: %v", err)
 			return false, nil
 		}
 		return true, nil
@@ -86,7 +86,7 @@ func ClusterLevelLoggingWithKibana(f *framework.Framework) {
 	err = wait.Poll(pollingInterval, pollingTimeout, func() (bool, error) {
 		req, err := e2eservice.GetServicesProxyRequest(f.ClientSet, f.ClientSet.CoreV1().RESTClient().Get())
 		if err != nil {
-			e2elog.Logf("Failed to get services proxy request: %v", err)
+			framework.Logf("Failed to get services proxy request: %v", err)
 			return false, nil
 		}
 
@@ -98,7 +98,7 @@ func ClusterLevelLoggingWithKibana(f *framework.Framework) {
 			Name("kibana-logging").
 			DoRaw()
 		if err != nil {
-			e2elog.Logf("Proxy call to kibana-logging failed: %v", err)
+			framework.Logf("Proxy call to kibana-logging failed: %v", err)
 			return false, nil
 		}
 		return true, nil

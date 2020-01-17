@@ -29,8 +29,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/uuid"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
-	e2elog "k8s.io/kubernetes/test/e2e/framework/log"
 	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
+	e2erc "k8s.io/kubernetes/test/e2e/framework/rc"
+	e2eskipper "k8s.io/kubernetes/test/e2e/framework/skipper"
 	testutils "k8s.io/kubernetes/test/utils"
 	imageutils "k8s.io/kubernetes/test/utils/image"
 )
@@ -41,14 +42,14 @@ var _ = SIGDescribe("Multi-AZ Clusters", func() {
 	var err error
 	image := framework.ServeHostnameImage
 	ginkgo.BeforeEach(func() {
-		framework.SkipUnlessProviderIs("gce", "gke", "aws")
+		e2eskipper.SkipUnlessProviderIs("gce", "gke", "aws")
 		if zoneCount <= 0 {
 			zoneCount, err = getZoneCount(f.ClientSet)
 			framework.ExpectNoError(err)
 		}
 		ginkgo.By(fmt.Sprintf("Checking for multi-zone cluster.  Zone count = %d", zoneCount))
 		msg := fmt.Sprintf("Zone count is %d, only run for multi-zone clusters, skipping test", zoneCount)
-		framework.SkipUnlessAtLeast(zoneCount, 2, msg)
+		e2eskipper.SkipUnlessAtLeast(zoneCount, 2, msg)
 		// TODO: SkipUnlessDefaultScheduler() // Non-default schedulers might not spread
 	})
 	ginkgo.It("should spread the pods of a service across zones", func() {
@@ -103,7 +104,7 @@ func SpreadServiceOrFail(f *framework.Framework, replicaCount int, image string)
 	// Based on the callers, replicas is always positive number: zoneCount >= 0 implies (2*zoneCount)+1 > 0.
 	// Thus, no need to test for it. Once the precondition changes to zero number of replicas,
 	// test for replicaCount > 0. Otherwise, StartPods panics.
-	framework.ExpectNoError(testutils.StartPods(f.ClientSet, replicaCount, f.Namespace.Name, serviceName, *podSpec, false, e2elog.Logf))
+	framework.ExpectNoError(testutils.StartPods(f.ClientSet, replicaCount, f.Namespace.Name, serviceName, *podSpec, false, framework.Logf))
 
 	// Wait for all of them to be scheduled
 	selector := labels.SelectorFromSet(labels.Set(map[string]string{"service": serviceName}))
@@ -210,18 +211,18 @@ func SpreadRCOrFail(f *framework.Framework, replicaCount int32, image string, ar
 	// Cleanup the replication controller when we are done.
 	defer func() {
 		// Resize the replication controller to zero to get rid of pods.
-		if err := framework.DeleteRCAndWaitForGC(f.ClientSet, f.Namespace.Name, controller.Name); err != nil {
-			e2elog.Logf("Failed to cleanup replication controller %v: %v.", controller.Name, err)
+		if err := e2erc.DeleteRCAndWaitForGC(f.ClientSet, f.Namespace.Name, controller.Name); err != nil {
+			framework.Logf("Failed to cleanup replication controller %v: %v.", controller.Name, err)
 		}
 	}()
 	// List the pods, making sure we observe all the replicas.
 	selector := labels.SelectorFromSet(labels.Set(map[string]string{"name": name}))
-	pods, err := e2epod.PodsCreated(f.ClientSet, f.Namespace.Name, name, replicaCount)
+	_, err = e2epod.PodsCreated(f.ClientSet, f.Namespace.Name, name, replicaCount)
 	framework.ExpectNoError(err)
 
 	// Wait for all of them to be scheduled
 	ginkgo.By(fmt.Sprintf("Waiting for %d replicas of %s to be scheduled.  Selector: %v", replicaCount, name, selector))
-	pods, err = e2epod.WaitForPodsWithLabelScheduled(f.ClientSet, f.Namespace.Name, selector)
+	pods, err := e2epod.WaitForPodsWithLabelScheduled(f.ClientSet, f.Namespace.Name, selector)
 	framework.ExpectNoError(err)
 
 	// Now make sure they're spread across zones
