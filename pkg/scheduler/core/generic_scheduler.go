@@ -37,7 +37,6 @@ import (
 	policylisters "k8s.io/client-go/listers/policy/v1beta1"
 	"k8s.io/client-go/util/workqueue"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
-	"k8s.io/kubernetes/pkg/scheduler/algorithm"
 	extenderv1 "k8s.io/kubernetes/pkg/scheduler/apis/extender/v1"
 	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
 	internalcache "k8s.io/kubernetes/pkg/scheduler/internal/cache"
@@ -45,7 +44,6 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/listers"
 	"k8s.io/kubernetes/pkg/scheduler/metrics"
 	schedulernodeinfo "k8s.io/kubernetes/pkg/scheduler/nodeinfo"
-	nodeinfosnapshot "k8s.io/kubernetes/pkg/scheduler/nodeinfo/snapshot"
 	"k8s.io/kubernetes/pkg/scheduler/util"
 	"k8s.io/kubernetes/pkg/scheduler/volumebinder"
 	utiltrace "k8s.io/utils/trace"
@@ -112,7 +110,7 @@ type ScheduleAlgorithm interface {
 	Preempt(context.Context, *framework.CycleState, *v1.Pod, error) (selectedNode *v1.Node, preemptedPods []*v1.Pod, cleanupNominatedPods []*v1.Pod, err error)
 	// Prioritizers returns a slice of priority config. This is exposed for
 	// testing.
-	Extenders() []algorithm.SchedulerExtender
+	Extenders() []SchedulerExtender
 	// Snapshot snapshots scheduler cache and node infos. This is needed
 	// for cluster autoscaler integration.
 	// TODO(#85691): remove this once CA migrates to creating a Framework instead of a full scheduler.
@@ -137,8 +135,8 @@ type genericScheduler struct {
 	cache                    internalcache.Cache
 	schedulingQueue          internalqueue.SchedulingQueue
 	framework                framework.Framework
-	extenders                []algorithm.SchedulerExtender
-	nodeInfoSnapshot         *nodeinfosnapshot.Snapshot
+	extenders                []SchedulerExtender
+	nodeInfoSnapshot         *internalcache.Snapshot
 	volumeBinder             *volumebinder.VolumeBinder
 	pvcLister                corelisters.PersistentVolumeClaimLister
 	pdbLister                policylisters.PodDisruptionBudgetLister
@@ -152,7 +150,7 @@ type genericScheduler struct {
 // functions.
 func (g *genericScheduler) Snapshot() error {
 	// Used for all fit and priority funcs.
-	return g.cache.UpdateNodeInfoSnapshot(g.nodeInfoSnapshot)
+	return g.cache.UpdateSnapshot(g.nodeInfoSnapshot)
 }
 
 // Framework returns the framework instance.
@@ -242,7 +240,7 @@ func (g *genericScheduler) Schedule(ctx context.Context, state *framework.CycleS
 	}, err
 }
 
-func (g *genericScheduler) Extenders() []algorithm.SchedulerExtender {
+func (g *genericScheduler) Extenders() []SchedulerExtender {
 	return g.extenders
 }
 
@@ -1097,9 +1095,9 @@ func podPassesBasicChecks(pod *v1.Pod, pvcLister corelisters.PersistentVolumeCla
 func NewGenericScheduler(
 	cache internalcache.Cache,
 	podQueue internalqueue.SchedulingQueue,
-	nodeInfoSnapshot *nodeinfosnapshot.Snapshot,
+	nodeInfoSnapshot *internalcache.Snapshot,
 	framework framework.Framework,
-	extenders []algorithm.SchedulerExtender,
+	extenders []SchedulerExtender,
 	volumeBinder *volumebinder.VolumeBinder,
 	pvcLister corelisters.PersistentVolumeClaimLister,
 	pdbLister policylisters.PodDisruptionBudgetLister,

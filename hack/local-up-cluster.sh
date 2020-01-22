@@ -40,6 +40,7 @@ NET_PLUGIN=${NET_PLUGIN:-""}
 # eg: "/etc/cni/net.d" for config files, and "/opt/cni/bin" for binaries.
 CNI_CONF_DIR=${CNI_CONF_DIR:-""}
 CNI_BIN_DIR=${CNI_BIN_DIR:-""}
+CLUSTER_CIDR=${CLUSTER_CIDR:-10.1.0.0/16}
 SERVICE_CLUSTER_IP_RANGE=${SERVICE_CLUSTER_IP_RANGE:-10.0.0.0/24}
 FIRST_SERVICE_CLUSTER_IP=${FIRST_SERVICE_CLUSTER_IP:-10.0.0.1}
 # if enabled, must set CGROUP_ROOT
@@ -561,6 +562,8 @@ EOF
       --kubelet-client-key="${CERT_DIR}/client-kube-apiserver.key" \
       --service-account-key-file="${SERVICE_ACCOUNT_KEY}" \
       --service-account-lookup="${SERVICE_ACCOUNT_LOOKUP}" \
+      --service-account-issuer="https://kubernetes.default.svc" \
+      --service-account-signing-key-file="${SERVICE_ACCOUNT_KEY}" \
       --enable-admission-plugins="${ENABLE_ADMISSION_PLUGINS}" \
       --disable-admission-plugins="${DISABLE_ADMISSION_PLUGINS}" \
       --admission-control-config-file="${ADMISSION_CONTROL_CONFIG_FILE}" \
@@ -614,7 +617,7 @@ EOF
 function start_controller_manager {
     node_cidr_args=()
     if [[ "${NET_PLUGIN}" == "kubenet" ]]; then
-      node_cidr_args=("--allocate-node-cidrs=true" "--cluster-cidr=10.1.0.0/16")
+      node_cidr_args=("--allocate-node-cidrs=true" "--cluster-cidr=${CLUSTER_CIDR}")
     fi
 
     cloud_config_arg=("--cloud-provider=${CLOUD_PROVIDER}" "--cloud-config=${CLOUD_CONFIG}")
@@ -658,7 +661,7 @@ function start_cloud_controller_manager {
 
     node_cidr_args=()
     if [[ "${NET_PLUGIN}" == "kubenet" ]]; then
-      node_cidr_args=("--allocate-node-cidrs=true" "--cluster-cidr=10.1.0.0/16")
+      node_cidr_args=("--allocate-node-cidrs=true" "--cluster-cidr=${CLUSTER_CIDR}")
     fi
 
     CLOUD_CTLRMGR_LOG=${LOG_DIR}/cloud-controller-manager.log
